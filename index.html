@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy 20th Birthday - Terminal Protocol</title>
+    <style>
+        /* ========== Reset & Base ========== */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000000;
+            font-family: 'Courier New', Consolas, 'Fira Code', 'SF Mono', 'Roboto Mono', monospace;
+            -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: default;
+            transition: background 0.8s ease-in;
+        }
+        /* 动画结束后添加：终端背后浮起暗绿色光晕 */
+        body.ambient-glow {
+            background: radial-gradient(
+                ellipse at center,
+                rgba(0, 40, 15, 0.5) 0%,
+                rgba(0, 15, 5, 0.2) 55%,
+                #000000 90%
+            );
+        }
+
+        /* ========== 代码雨背景画布 ========== */
+        #matrix-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 2s ease-in;
+        }
+        #matrix-canvas.active {
+            opacity: 1;
+        }
+
+        /* ========== Terminal Container ========== */
+        #terminal-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        #terminal {
+            position: relative;
+            width: 92%;
+            max-width: 720px;
+            padding: 28px 24px;
+            color: #00ff00;
+            font-size: clamp(13px, 2.8vw, 17px);
+            line-height: 1.8;
+            letter-spacing: 0.02em;
+            word-break: break-all;
+            /* 文字发光辉光效果 */
+            text-shadow: 0 0 4px rgba(0, 255, 0, 0.6),
+                         0 0 12px rgba(0, 255, 0, 0.3),
+                         0 0 30px rgba(0, 255, 0, 0.15);
+            /* 终端边框微光 */
+            border: 1px solid rgba(0, 255, 0, 0.15);
+            border-radius: 4px;
+            background: rgba(0, 10, 0, 0.3);
+            box-shadow: inset 0 0 60px rgba(0, 255, 0, 0.03),
+                        0 0 40px rgba(0, 255, 0, 0.05);
+            transition: transform 0.1s, opacity 0.1s;
+        }
+
+        /* ========== 终端行样式 ========== */
+        .terminal-line {
+            position: relative;
+            min-height: 1.4em;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* 系统阶段：亮绿色 */
+        .terminal-line.sys {
+            color: #00ff00;
+            text-shadow: 0 0 4px rgba(0, 255, 0, 0.6),
+                         0 0 12px rgba(0, 255, 0, 0.3);
+        }
+
+        /* 温情阶段：极客青色 */
+        .terminal-line.warm {
+            color: #00ffff;
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.6),
+                         0 0 14px rgba(0, 255, 255, 0.3),
+                         0 0 30px rgba(0, 255, 255, 0.12);
+        }
+
+        /* 署名行：终端注释风格，右下角暗色小字 */
+        .terminal-line.signature {
+            color: rgba(0, 255, 0, 0.5);
+            text-shadow: 0 0 3px rgba(0, 255, 0, 0.35);
+            text-align: right;
+            font-size: 0.75em;
+            margin-top: 0.6em;
+            opacity: 0;
+            animation: sigFadeIn 1.5s ease-out 0.3s forwards;
+        }
+        @keyframes sigFadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ========== 闪烁光标（增强辉光） ========== */
+        .cursor {
+            display: inline;
+            color: #00ff00;
+            font-weight: bold;
+            animation: cursorBlink 1s step-end infinite;
+            /* 光标后方光斑 */
+            text-shadow: 0 0 8px rgba(0, 255, 0, 0.9),
+                         0 0 20px rgba(0, 255, 0, 0.5),
+                         0 0 40px rgba(0, 255, 0, 0.25);
+        }
+        .cursor.cyan {
+            color: #00ffff;
+            text-shadow: 0 0 8px rgba(0, 255, 255, 0.9),
+                         0 0 20px rgba(0, 255, 255, 0.5),
+                         0 0 40px rgba(0, 255, 255, 0.25);
+        }
+
+        @keyframes cursorBlink {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0; }
+        }
+
+        /* ========== 进度条样式 ========== */
+        .progress-bar {
+            letter-spacing: 0;
+        }
+
+        /* ========== Canvas 粒子层 ========== */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* ========== CRT 扫描线叠加层 ========== */
+        #crt-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.22) 0px,
+                rgba(0, 0, 0, 0.22) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+        }
+
+        /* CRT 暗角 */
+        #crt-vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 99;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 55%,
+                rgba(0, 0, 0, 0.5) 85%,
+                rgba(0, 0, 0, 0.75) 100%
+            );
+        }
+
+        /* CRT 屏幕闪烁动画 */
+        @keyframes crtFlicker {
+            0%   { opacity: 0.97; }
+            3%   { opacity: 1; }
+            6%   { opacity: 0.98; }
+            9%   { opacity: 1; }
+            50%  { opacity: 1; }
+            92%  { opacity: 0.99; }
+            95%  { opacity: 0.97; }
+            100% { opacity: 1; }
+        }
+        #crt-overlay, #crt-vignette {
+            animation: crtFlicker 8s infinite;
+        }
+
+        /* ========== 屏幕清空闪光效果 ========== */
+        @keyframes screenFlash {
+            0%   { box-shadow: inset 0 0 0 rgba(0,255,0,0), 0 0 40px rgba(0,255,0,0.05); }
+            50%  { box-shadow: inset 0 0 120px rgba(0,255,0,0.6), 0 0 80px rgba(0,255,0,0.4); }
+            100% { box-shadow: inset 0 0 0 rgba(0,255,0,0), 0 0 40px rgba(0,255,0,0.05); }
+        }
+        #terminal.flash {
+            animation: screenFlash 0.4s ease-out;
+        }
+
+        /* ========== 屏幕故障抖动效果 ========== */
+        @keyframes glitchJitter {
+            0%   { transform: translateX(0); }
+            10%  { transform: translateX(-4px) skewY(0.3deg); }
+            20%  { transform: translateX(6px) skewY(-0.2deg); }
+            30%  { transform: translateX(-2px); }
+            40%  { transform: translateX(8px); }
+            50%  { transform: translateX(-6px) skewY(0.1deg); }
+            60%  { transform: translateX(3px); }
+            70%  { transform: translateX(-1px); }
+            80%  { transform: translateX(5px); }
+            90%  { transform: translateX(-3px); }
+            100% { transform: translateX(0); }
+        }
+
+        @keyframes glitchRGB {
+            0%   { text-shadow:
+                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                2px 0 rgba(255,0,0,0.4), -2px 0 rgba(0,255,255,0.4); }
+            25%  { text-shadow:
+                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                -3px 0 rgba(255,0,0,0.5), 3px 0 rgba(0,255,255,0.5); }
+            50%  { text-shadow:
+                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                4px 0 rgba(255,0,0,0.3), -4px 0 rgba(0,255,255,0.3); }
+            75%  { text-shadow:
+                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                -2px 0 rgba(255,0,0,0.5), 2px 0 rgba(0,255,255,0.5); }
+            100% { text-shadow:
+                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                0px 0 rgba(255,0,0,0), 0px 0 rgba(0,255,255,0); }
+        }
+
+        #terminal.glitch {
+            animation: glitchJitter 0.5s ease-out, glitchRGB 0.5s ease-out;
+        }
+
+        /* ========== 响应式适配 ========== */
+        @media (max-width: 480px) {
+            #terminal {
+                padding: 18px 14px;
+                width: 95%;
+                font-size: clamp(11px, 3.6vw, 14px);
+                line-height: 1.7;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            #terminal {
+                max-width: 800px;
+                padding: 36px 32px;
+                font-size: 19px;
+                line-height: 1.9;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 代码雨背景画布（阶段三浮现） -->
+    <canvas id="matrix-canvas"></canvas>
+
+    <!-- 终端文本输出区 -->
+    <div id="terminal-wrapper">
+        <div id="terminal"><div class="terminal-line sys">>_</div></div>
+    </div>
+
+    <!-- 粒子动画画布 -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- CRT 扫描线 -->
+    <div id="crt-overlay"></div>
+    <!-- CRT 暗角 -->
+    <div id="crt-vignette"></div>
+
+    <script>
+    (function() {
+        // ==================== URL 参数解析（个性化名字） ====================
+        // 用法：?name=小明 → 覆盖默认名字
+        const urlParams = new URLSearchParams(window.location.search);
+        const recipientName = urlParams.get('name') || '方琪姐';
+
+        // ==================== DOM 引用 ====================
+        const terminal = document.getElementById('terminal');
+        const particleCanvas = document.getElementById('particle-canvas');
+        const particleCtx = particleCanvas.getContext('2d');
+        const matrixCanvas = document.getElementById('matrix-canvas');
+        const matrixCtx = matrixCanvas.getContext('2d');
+
+        // ==================== 工具函数 ====================
+
+        /** 延迟指定毫秒数 */
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        /**
+         * 创建并返回一个光标元素
+         * @param {string} colorClass - 'cyan' 表示青色光标，否则默认绿色
+         */
+        function createCursor(colorClass = '') {
+            const cursor = document.createElement('span');
+            cursor.className = 'cursor' + (colorClass ? ' ' + colorClass : '');
+            cursor.textContent = '_';
+            return cursor;
+        }
+
+        // ==================== Web Audio 音频引擎 ====================
+        // 所有音效使用 Web Audio API 实时合成，无外部依赖
+
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this._initialized = false;
+                // 进度条上升音专用节点
+                this._progressOsc = null;
+                this._progressGain = null;
+                // 温暖背景 Pad 专用节点
+                this._padOscs = [];
+                this._padGain = null;
+                this._padLFO = null;
+            }
+
+            /**
+             * 初始化 AudioContext（需在用户手势或 DOM 交互后调用）
+             * 现代浏览器允许在 async 上下文中自动恢复
+             */
+            async init() {
+                if (this._initialized) return;
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (this.ctx.state === 'suspended') {
+                        await this.ctx.resume();
+                    }
+                    this._initialized = true;
+                } catch (e) {
+                    // 音频不可用时静默降级，不影响页面功能
+                    console.warn('Audio unavailable:', e.message);
+                }
+            }
+
+            /** 确保 AudioContext 处于运行状态 */
+            _ensureRunning() {
+                if (!this.ctx) return false;
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                return this.ctx.state === 'running';
+            }
+
+            /**
+             * 打字机咔嗒声 —— 短促白噪声爆破
+             * 模拟机械键盘微动开关的脆响
+             */
+            playTypingClick(soft = false) {
+                if (!this._ensureRunning()) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                // 噪声源：极短的白噪声
+                const bufferSize = ctx.sampleRate * 0.02; // 20ms
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.6;
+                }
+
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                // 带通滤波器：集中在 2.5kHz 附近，模拟键击高频
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = soft ? 1800 : 2800;
+                filter.Q.value = 1.2;
+
+                // 增益包络：极快攻击，快速衰减
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(soft ? 0.06 : 0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + (soft ? 0.02 : 0.025));
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                noise.start(now);
+                noise.stop(now + 0.03);
+            }
+
+            /**
+             * 系统 [OK] 蜂鸣声 —— 短促正弦波
+             */
+            playSystemBeep() {
+                if (!this._ensureRunning()) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = 880;
+
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.10, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            }
+
+            /**
+             * 进度条上升音 —— 频率随进度爬升的锯齿波
+             */
+            startProgressTone() {
+                if (!this._ensureRunning()) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                this._progressOsc = ctx.createOscillator();
+                this._progressOsc.type = 'sawtooth';
+                this._progressOsc.frequency.value = 150;
+
+                this._progressGain = ctx.createGain();
+                this._progressGain.gain.setValueAtTime(0.025, now);
+
+                // 低通滤波去掉刺耳高频
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 600;
+
+                this._progressOsc.connect(filter);
+                filter.connect(this._progressGain);
+                this._progressGain.connect(ctx.destination);
+                this._progressOsc.start(now);
+            }
+
+            /** 更新进度条音高 */
+            updateProgressTone(percent) {
+                if (this._progressOsc && this._ensureRunning()) {
+                    // 频率从 150Hz 爬升到 700Hz
+                    const freq = 150 + (percent / 100) * 550;
+                    this._progressOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
+                }
+            }
+
+            /** 停止进度条音 */
+            stopProgressTone() {
+                if (!this._progressOsc || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                try {
+                    this._progressGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    this._progressOsc.stop(now + 0.16);
+                } catch (e) { /* 忽略已停止的错误 */ }
+                this._progressOsc = null;
+                this._progressGain = null;
+            }
+
+            /**
+             * 温暖背景 Pad —— 两个微失谐正弦波 + LFO 颤音
+             * 在阶段三祝福文字打印期间低音量循环
+             */
+            startWarmPad() {
+                if (!this._ensureRunning()) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                this._padGain = ctx.createGain();
+                this._padGain.gain.setValueAtTime(0, now);
+                this._padGain.gain.linearRampToValueAtTime(0.03, now + 1.5); // 缓慢淡入
+
+                // LFO 用于音量颤音
+                this._padLFO = ctx.createOscillator();
+                this._padLFO.type = 'sine';
+                this._padLFO.frequency.value = 0.35; // 缓慢颤音
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.value = 0.006;
+                this._padLFO.connect(lfoGain);
+                lfoGain.connect(this._padGain.gain);
+                this._padLFO.start(now);
+
+                // 两个微失谐正弦波，营造温暖合唱感
+                const freqs = [261.63, 264.5]; // C4 附近微失谐
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 500;
+                filter.Q.value = 0.5;
+                filter.connect(this._padGain);
+                this._padGain.connect(ctx.destination);
+
+                this._padOscs = freqs.map(f => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = f;
+                    osc.connect(filter);
+                    osc.start(now);
+                    return osc;
+                });
+            }
+
+            /** 停止背景 Pad */
+            stopWarmPad() {
+                if (!this.ctx || !this._padGain) return;
+                const now = this.ctx.currentTime;
+                try {
+                    this._padGain.gain.linearRampToValueAtTime(0, now + 2.0);
+                    this._padOscs.forEach(o => { try { o.stop(now + 2.1); } catch(e) {} });
+                    if (this._padLFO) { try { this._padLFO.stop(now + 2.1); } catch(e) {} }
+                } catch (e) { /* 忽略 */ }
+                this._padOscs = [];
+                this._padLFO = null;
+                this._padGain = null;
+            }
+
+            /**
+             * 结尾双音程铃声 —— C5→E5 带模拟混响尾音
+             */
+            playChime() {
+                if (!this._ensureRunning()) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                const notes = [
+                    { freq: 523.25, start: 0,    dur: 0.5 },  // C5
+                    { freq: 659.25, start: 0.18, dur: 0.6 },  // E5
+                ];
+
+                // 主混响总线（多个延迟模拟）
+                const reverbGain = ctx.createGain();
+                reverbGain.gain.value = 0.08;
+                reverbGain.connect(ctx.destination);
+
+                notes.forEach(({ freq, start, dur }) => {
+                    const t = now + start;
+
+                    // 主音
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    const g = ctx.createGain();
+                    g.gain.setValueAtTime(0.09, t);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+                    osc.connect(g);
+                    g.connect(ctx.destination);
+                    g.connect(reverbGain);
+                    osc.start(t);
+                    osc.stop(t + dur + 0.1);
+
+                    // 延迟混响 tap
+                    [0.12, 0.25, 0.38].forEach(delay => {
+                        const dg = ctx.createGain();
+                        dg.gain.setValueAtTime(0.025, t + delay);
+                        dg.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.4);
+                        const dOsc = ctx.createOscillator();
+                        dOsc.type = 'sine';
+                        dOsc.frequency.value = freq;
+                        dOsc.connect(dg);
+                        dg.connect(reverbGain);
+                        dOsc.start(t + delay);
+                        dOsc.stop(t + delay + 0.5);
+                    });
+                });
+            }
+        }
+
+        const audio = new AudioEngine();
+
+        // ==================== 代码雨背景（阶段三浮现） ====================
+
+        class MatrixRain {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.columns = [];
+                this.animationId = null;
+                this.running = false;
+                this.resize();
+                this._bindResize();
+            }
+
+            _bindResize() {
+                this._resizeHandler = () => this.resize();
+                window.addEventListener('resize', this._resizeHandler);
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this._initColumns();
+            }
+
+            _initColumns() {
+                const fontSize = 14;
+                const colWidth = fontSize * 0.8;
+                const colCount = Math.floor(this.canvas.width / colWidth);
+                this.columns = [];
+                // 日文片假名 + 数字字符集
+                const chars = 'ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789';
+
+                for (let i = 0; i < colCount; i++) {
+                    this.columns.push({
+                        x: i * colWidth,
+                        y: Math.random() * this.canvas.height * -1, // 随机起始高度
+                        speed: Math.random() * 1.2 + 0.5,
+                        chars: [],
+                        nextSwitch: 0,
+                    });
+                    // 为每列生成随机字符序列
+                    const len = Math.floor(Math.random() * 15) + 8;
+                    for (let j = 0; j < len; j++) {
+                        this.columns[i].chars.push(chars[Math.floor(Math.random() * chars.length)]);
+                    }
+                }
+            }
+
+            start() {
+                this.running = true;
+                // 让 canvas 可见
+                this.canvas.classList.add('active');
+                this._tick();
+            }
+
+            stop() {
+                this.running = false;
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+            }
+
+            _tick() {
+                if (!this.running) return;
+
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const fontSize = 14;
+
+                // 半透明黑色覆盖产生拖尾 + 淡出
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                ctx.fillRect(0, 0, w, h);
+
+                ctx.font = `${fontSize}px "Courier New", monospace`;
+                ctx.textBaseline = 'top';
+
+                for (const col of this.columns) {
+                    // 绘制整列字符
+                    for (let i = 0; i < col.chars.length; i++) {
+                        const charY = col.y - i * fontSize;
+                        if (charY < -fontSize || charY > h) continue;
+
+                        // 头部字符更亮，尾部逐渐暗淡
+                        const brightness = i === 0 ? 0.10 : Math.max(0.02, 0.08 - i * 0.006);
+                        ctx.fillStyle = i === 0
+                            ? `rgba(180, 255, 200, ${brightness + 0.04})`
+                            : `rgba(0, 255, 0, ${brightness})`;
+                        ctx.fillText(col.chars[i], col.x, charY);
+                    }
+
+                    // 向下移动
+                    col.y += col.speed;
+
+                    // 定时更换尾部字符
+                    col.nextSwitch--;
+                    if (col.nextSwitch <= 0) {
+                        const idx = Math.floor(Math.random() * col.chars.length);
+                        col.chars[idx] = this._randomChar();
+                        col.nextSwitch = Math.floor(Math.random() * 8) + 3;
+                    }
+
+                    // 超出屏幕后重置
+                    if (col.y - col.chars.length * fontSize > h) {
+                        col.y = -col.chars.length * fontSize * Math.random();
+                        col.speed = Math.random() * 0.8 + 0.3;
+                    }
+                }
+
+                this.animationId = requestAnimationFrame(() => this._tick());
+            }
+
+            _randomChar() {
+                const chars = 'ｦｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789';
+                return chars[Math.floor(Math.random() * chars.length)];
+            }
+
+            async fadeOut(duration = 1500) {
+                const start = performance.now();
+                const initialOpacity = 1;
+                const animate = (ts) => {
+                    const elapsed = ts - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    this.canvas.style.opacity = initialOpacity * (1 - progress);
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                requestAnimationFrame(animate);
+                await sleep(duration);
+                this.stop();
+                this.canvas.classList.remove('active');
+            }
+
+            destroy() {
+                this.stop();
+                window.removeEventListener('resize', this._resizeHandler);
+            }
+        }
+
+        const matrixRain = new MatrixRain(matrixCanvas, matrixCtx);
+
+        // ==================== 打字机引擎 ====================
+
+        /**
+         * 在终端中逐字打印一行文本，同时触发打字音效
+         * @param {string} text - 要打印的文本
+         * @param {number} charSpeed - 每个字符的间隔 (ms)
+         * @param {string} styleClass - 行样式类名 ('sys' | 'warm')
+         * @param {boolean} playSound - 是否播放打字音效
+         * @returns {HTMLElement} 创建的行元素
+         */
+        async function typeLine(text, charSpeed = 50, styleClass = 'sys', playSound = true) {
+            const line = document.createElement('div');
+            line.className = 'terminal-line ' + styleClass;
+            terminal.appendChild(line);
+
+            const cursor = createCursor(styleClass === 'warm' ? 'cyan' : '');
+            line.appendChild(cursor);
+
+            const isWarm = styleClass === 'warm';
+
+            for (let i = 0; i < text.length; i++) {
+                cursor.insertAdjacentText('beforebegin', text[i]);
+                // 打字音效：系统阶段清脆，温情阶段柔和
+                if (playSound && text[i] !== ' ') {
+                    audio.playTypingClick(isWarm);
+                }
+                await sleep(charSpeed);
+            }
+
+            cursor.remove();
+            return line;
+        }
+
+        /**
+         * 在行尾追加闪烁光标
+         */
+        function appendCursor(line, colorClass = '') {
+            const cursor = createCursor(colorClass);
+            line.appendChild(cursor);
+            return cursor;
+        }
+
+        // ==================== 阶段一：系统伪装启动 ====================
+
+        async function phaseOne() {
+            // 动态替换目标编号（支持 URL 参数 ?name=）
+            const bootLines = [
+                ['初始化观测协议... [OK]', 25],
+                ['正在连接时间轴... [OK]', 25],
+                ['检索物理坐标... 匹配成功。', 25],
+                [`锁定目标：2006 号观测对象。`, 28],
+                ['状态：即将跨越第 20 个时间奇点。', 30],
+                ['正在编译专属讯息...', 28],
+            ];
+
+            for (let idx = 0; idx < bootLines.length; idx++) {
+                const [text, speed] = bootLines[idx];
+                await typeLine(text, speed, 'sys', true);
+
+                // 包含 [OK] 的行播放系统蜂鸣声
+                if (text.includes('[OK]')) {
+                    audio.playSystemBeep();
+                }
+
+                await sleep(350);
+            }
+
+            await sleep(500);
+        }
+
+        // ==================== 阶段二：加载进度条 ====================
+
+        async function phaseTwo() {
+            const totalBlocks = 20;
+            const totalDuration = 1800;
+            const stepDuration = totalDuration / totalBlocks;
+
+            const line = document.createElement('div');
+            line.className = 'terminal-line sys progress-bar';
+            terminal.appendChild(line);
+
+            const cursor = createCursor();
+            line.appendChild(cursor);
+
+            // 启动进度条上升音
+            audio.startProgressTone();
+
+            for (let step = 2; step <= totalBlocks; step++) {
+                const percent = Math.round((step / totalBlocks) * 100);
+                const filled = '█'.repeat(step);
+                const empty = '░'.repeat(totalBlocks - step);
+
+                while (line.firstChild && line.firstChild !== cursor) {
+                    line.removeChild(line.firstChild);
+                }
+                const textNode = document.createTextNode(`[${filled}${empty}] ${percent}%`);
+                line.insertBefore(textNode, cursor);
+
+                // 更新进度条音高
+                audio.updateProgressTone(percent);
+
+                const isEdge = (step === 2 || step === totalBlocks);
+                const adjustedSpeed = isEdge ? stepDuration * 1.5 : stepDuration * 0.85;
+                await sleep(adjustedSpeed);
+            }
+
+            // 停止进度条音
+            audio.stopProgressTone();
+
+            await sleep(400);
+
+            // ---- 屏幕故障抖动 + 清空 ----
+            terminal.classList.add('glitch');
+            await sleep(500);
+            terminal.classList.remove('glitch');
+
+            terminal.classList.add('flash');
+            await sleep(200);
+
+            terminal.innerHTML = '';
+            terminal.classList.remove('flash');
+
+            await sleep(1000);
+        }
+
+        // ==================== 阶段三：核心祝福输出 ====================
+
+        async function phaseThree() {
+            // 启动代码雨背景和温暖 Pad 音
+            matrixRain.start();
+            audio.startWarmPad();
+
+            // 祝福文案 —— A版：信件抬头式，名字独立成行
+            const warmLines = [
+                ['物理世界的引力让人下坠，', 90],
+                ['但时间的沙漏会为你结晶。', 95],
+                ['', 0],
+                [recipientName + '。', 130],
+                ['', 0],
+                ['20岁不是一个数字，而是一个全新的坐标。', 100],
+                ['在这个无边际的系统里，愿你始终拥有覆盖全局的权限，', 100],
+                ['永远自由，永远清醒。', 110],
+                ['', 0],
+                ['Protocol Executed.', 70],
+                ['Happy 20th Birthday.', 85],
+            ];
+
+            for (const [text, speed] of warmLines) {
+                if (text === '') {
+                    const emptyLine = document.createElement('div');
+                    emptyLine.className = 'terminal-line warm';
+                    emptyLine.innerHTML = '&nbsp;';
+                    terminal.appendChild(emptyLine);
+                    await sleep(400);
+                } else {
+                    await typeLine(text, speed, 'warm', true);
+                    await sleep(500);
+                }
+            }
+
+            // 播放入口双音程铃声
+            audio.playChime();
+
+            // 停止背景 Pad
+            audio.stopWarmPad();
+
+            // 代码雨逐渐淡出
+            matrixRain.fadeOut(2000);
+
+            // 最后一行（Happy 20th Birthday）保留闪烁光标
+            const lastLine = terminal.lastElementChild;
+            if (lastLine && lastLine.classList.contains('warm')) {
+                appendCursor(lastLine, 'cyan');
+            }
+
+            // 短暂停顿后浮现署名
+            await sleep(800);
+            const sigLine = document.createElement('div');
+            sigLine.className = 'terminal-line signature';
+            sigLine.textContent = '// Designed by 在天真无邪';
+            terminal.appendChild(sigLine);
+        }
+
+        // ==================== 阶段四：Canvas 粒子视觉彩蛋（增强：运动拖尾） ====================
+
+        class ParticleEffect {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.particles = [];
+                this.animationId = null;
+                this.running = false;
+                this.startTime = 0;
+                this.targets20 = [];
+                this.targetsInfinity = [];
+                this.resize();
+                this._bindResize();
+            }
+
+            _bindResize() {
+                this._resizeHandler = () => this.resize();
+                window.addEventListener('resize', this._resizeHandler);
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this._computeShapeTargets();
+            }
+
+            _computeShapeTargets() {
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const fontSize = Math.max(60, Math.min(w * 0.12, 160));
+                const sampleStep = 5;
+
+                this.targets20 = this._sampleTextPixels(
+                    '20', fontSize, w / 2 - fontSize * 0.9, h / 2 - fontSize * 0.55, sampleStep
+                );
+                this.targetsInfinity = this._sampleTextPixels(
+                    '∞', fontSize * 1.2, w / 2 - fontSize * 0.65, h / 2 - fontSize * 0.55, sampleStep
+                );
+            }
+
+            _sampleTextPixels(text, fontSize, offsetX, offsetY, step) {
+                const offCanvas = document.createElement('canvas');
+                const offCtx = offCanvas.getContext('2d');
+                const textWidth = fontSize * text.length * 0.75;
+                const textHeight = fontSize * 1.3;
+                offCanvas.width = textWidth;
+                offCanvas.height = textHeight;
+
+                offCtx.font = `bold ${fontSize}px "Courier New", Consolas, monospace`;
+                offCtx.fillStyle = '#ffffff';
+                offCtx.textBaseline = 'top';
+                offCtx.fillText(text, 0, 0);
+
+                const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+                const pixels = [];
+                for (let y = 0; y < offCanvas.height; y += step) {
+                    for (let x = 0; x < offCanvas.width; x += step) {
+                        const idx = (y * offCanvas.width + x) * 4;
+                        if (imageData.data[idx + 3] > 100) {
+                            pixels.push({ x: x + offsetX, y: y + offsetY });
+                        }
+                    }
+                }
+                return pixels;
+            }
+
+            _spawnParticles() {
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const count = Math.max(65, Math.min(180, Math.floor((w * h) / 6000)));
+
+                for (let i = 0; i < count; i++) {
+                    const p = {
+                        x: Math.random() * w,
+                        y: h + Math.random() * 100,
+                        prevX: 0,     // 前一帧 X（拖尾用）
+                        prevY: 0,     // 前一帧 Y（拖尾用）
+                        targetX: Math.random() * w,
+                        targetY: Math.random() * h * 0.5,
+                        speed: Math.random() * 0.02 + 0.008,
+                        size: Math.random() * 2.5 + 1.2,
+                        hue: Math.random() > 0.35 ? 120 : 180,
+                        alpha: Math.random() * 0.7 + 0.3,
+                        life: 1.0,
+                        decayRate: Math.random() * 0.0015 + 0.0008,
+                        wobbleAmp: Math.random() * 0.4 + 0.1,
+                        wobbleSpeed: Math.random() * 0.03 + 0.01,
+                        wobbleOffset: Math.random() * Math.PI * 2,
+                    };
+                    p.prevX = p.x;
+                    p.prevY = p.y;
+                    this.particles.push(p);
+                }
+            }
+
+            _assignTargets(targets, ratio = 0.65) {
+                const count = Math.floor(this.particles.length * ratio);
+                if (targets.length === 0 || count === 0) return;
+
+                const indices = [];
+                for (let i = 0; i < this.particles.length; i++) indices.push(i);
+                for (let i = 0; i < count; i++) {
+                    const j = i + Math.floor(Math.random() * (indices.length - i));
+                    [indices[i], indices[j]] = [indices[j], indices[i]];
+                }
+
+                for (let i = 0; i < count; i++) {
+                    const p = this.particles[indices[i]];
+                    const target = targets[i % targets.length];
+                    p.targetX = target.x + (Math.random() - 0.5) * 6;
+                    p.targetY = target.y + (Math.random() - 0.5) * 6;
+                    p.speed = Math.random() * 0.025 + 0.015;
+                }
+            }
+
+            _releaseParticles() {
+                const w = this.canvas.width;
+                for (const p of this.particles) {
+                    p.targetX = p.x + (Math.random() - 0.5) * 120;
+                    p.targetY = -60 - Math.random() * this.canvas.height * 0.4;
+                    p.speed = Math.random() * 0.015 + 0.006;
+                }
+            }
+
+            async run() {
+                this.running = true;
+                this.startTime = performance.now();
+                this._spawnParticles();
+
+                const phaseTimeline = [
+                    { at: 0,    action: () => {} },
+                    { at: 1800, action: () => { this._assignTargets(this.targets20, 0.55); } },
+                    { at: 3800, action: () => { this._assignTargets(this.targetsInfinity, 0.55); } },
+                    { at: 5600, action: () => { this._releaseParticles(); } },
+                ];
+
+                const ctx = this.ctx;
+                const animate = (timestamp) => {
+                    if (!this.running) return;
+
+                    const elapsed = timestamp - this.startTime;
+                    const w = this.canvas.width;
+                    const h = this.canvas.height;
+
+                    for (const pt of phaseTimeline) {
+                        if (elapsed >= pt.at && !pt._fired) {
+                            pt._fired = true;
+                            pt.action();
+                        }
+                    }
+
+                    // 【增强】运动拖尾：用半透明黑色覆盖代替 clearRect
+                    // 粒子移动过的位置留下逐渐消散的残影
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (const p of this.particles) {
+                        // 保存前一帧位置用于拖尾绘制
+                        p.prevX = p.x;
+                        p.prevY = p.y;
+
+                        const dx = p.targetX - p.x;
+                        const dy = p.targetY - p.y;
+                        p.x += dx * p.speed;
+                        p.y += dy * p.speed;
+                        p.x += Math.sin(elapsed * p.wobbleSpeed + p.wobbleOffset) * p.wobbleAmp;
+
+                        p.life -= p.decayRate;
+                        if (p.life < 0) p.life = 0;
+
+                        const alpha = p.alpha * p.life;
+                        if (alpha < 0.02) continue;
+
+                        const rgb = p.hue === 120 ? `0, 255, 0` : `0, 255, 255`;
+
+                        // 拖尾线段：从前一帧位置到当前位置
+                        const trailAlpha = alpha * 0.25;
+                        ctx.beginPath();
+                        ctx.moveTo(p.prevX, p.prevY);
+                        ctx.lineTo(p.x, p.y);
+                        ctx.strokeStyle = `rgba(${rgb}, ${trailAlpha})`;
+                        ctx.lineWidth = p.size * 1.2;
+                        ctx.stroke();
+
+                        // 外层大光晕
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size * 3.5, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${rgb}, ${alpha * 0.08})`;
+                        ctx.fill();
+
+                        // 内层光晕
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${rgb}, ${alpha * 0.22})`;
+                        ctx.fill();
+
+                        // 粒子核心
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${rgb}, ${alpha})`;
+                        ctx.fill();
+
+                        // 粒子亮点
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size * 0.45, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+                        ctx.fill();
+                    }
+
+                    const allDead = this.particles.every(p => p.life <= 0);
+                    if (allDead && elapsed > 8000) {
+                        this.running = false;
+                        return;
+                    }
+
+                    this.animationId = requestAnimationFrame(animate);
+                };
+
+                this.animationId = requestAnimationFrame(animate);
+
+                await new Promise(resolve => {
+                    const check = setInterval(() => {
+                        if (!this.running) { clearInterval(check); resolve(); }
+                    }, 300);
+                    setTimeout(() => { clearInterval(check); this.running = false; resolve(); }, 10000);
+                });
+
+                await this._fadeOutCanvas();
+            }
+
+            async _fadeOutCanvas() {
+                const ctx = this.ctx;
+                const fadeSteps = 15;
+                const fadeInterval = 20;
+                for (let i = 0; i < fadeSteps; i++) {
+                    const alpha = 1 - i / fadeSteps;
+                    ctx.fillStyle = `rgba(0, 0, 0, ${1 - alpha})`;
+                    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    await sleep(fadeInterval);
+                }
+            }
+
+            destroy() {
+                this.running = false;
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+                window.removeEventListener('resize', this._resizeHandler);
+                this.particles = [];
+            }
+        }
+
+        // ==================== 点击粒子迸发彩蛋（动画结束后触发） ====================
+
+        class ClickBurst {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.bursts = [];        // 活跃的迸发粒子组
+                this.animationId = null;
+                this.running = false;
+                this._handler = null;
+            }
+
+            /** 启用点击监听 */
+            enable() {
+                this._handler = (e) => {
+                    // 移动端用 touch，桌面端用 click
+                    const x = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+                    const y = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+                    this._spawnBurst(x, y);
+                };
+                window.addEventListener('click', this._handler);
+                window.addEventListener('touchstart', this._handler, { passive: true });
+                // 修改光标提示可交互
+                document.body.style.cursor = 'pointer';
+                this.running = true;
+                this._loop();
+            }
+
+            /** 在指定位置生成一圈迸发粒子 */
+            _spawnBurst(x, y) {
+                const count = 35;
+                const particles = [];
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
+                    const speed = Math.random() * 4 + 2;
+                    particles.push({
+                        x, y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        size: Math.random() * 3 + 1,
+                        hue: Math.random() > 0.4 ? 120 : 180,
+                        alpha: 1,
+                        life: 1,
+                        decay: Math.random() * 0.02 + 0.012,
+                    });
+                }
+                this.bursts.push(particles);
+            }
+
+            _loop() {
+                if (!this.running) return;
+
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+
+                // 没有活跃迸发时跳过渲染，不覆盖星场背景
+                if (this.bursts.length === 0) {
+                    this.animationId = requestAnimationFrame(() => this._loop());
+                    return;
+                }
+
+                // 半透明覆盖产生拖尾
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+                ctx.fillRect(0, 0, w, h);
+
+                // 遍历所有迸发组
+                for (let b = this.bursts.length - 1; b >= 0; b--) {
+                    const particles = this.bursts[b];
+                    let allDead = true;
+
+                    for (const p of particles) {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.03;    // 微重力
+                        p.vx *= 0.99;     // 空气阻力
+                        p.vy *= 0.99;
+                        p.life -= p.decay;
+                        if (p.life < 0) p.life = 0;
+                        if (p.life > 0.01) allDead = false;
+
+                        const alpha = p.alpha * p.life;
+                        if (alpha < 0.02) continue;
+
+                        const rgb = p.hue === 120 ? '0, 255, 0' : '0, 255, 255';
+
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${rgb}, ${alpha})`;
+                        ctx.fill();
+
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${rgb}, ${alpha * 0.15})`;
+                        ctx.fill();
+                    }
+
+                    if (allDead) {
+                        this.bursts.splice(b, 1);
+                    }
+                }
+
+                this.animationId = requestAnimationFrame(() => this._loop());
+            }
+
+            disable() {
+                this.running = false;
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+                if (this._handler) {
+                    window.removeEventListener('click', this._handler);
+                    window.removeEventListener('touchstart', this._handler);
+                    this._handler = null;
+                }
+                document.body.style.cursor = 'default';
+                this.bursts = [];
+            }
+        }
+
+        // ==================== 暗光星场背景（粒子消散后持续运行） ====================
+        // 替代纯黑背景，若干暗绿色/青色星点在背景缓慢漂移、闪烁
+
+        class AmbientStarfield {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.stars = [];
+                this.animationId = null;
+                this.running = false;
+                this._boundResize = () => this._initStars();
+                window.addEventListener('resize', this._boundResize);
+                this._initStars();
+            }
+
+            _initStars() {
+                const w = this.canvas.width || window.innerWidth;
+                const h = this.canvas.height || window.innerHeight;
+                this.stars = [];
+                const count = Math.max(35, Math.floor((w * h) / 18000));
+                for (let i = 0; i < count; i++) {
+                    this.stars.push({
+                        x: Math.random() * w,
+                        y: Math.random() * h,
+                        size: Math.random() * 1.6 + 0.4,
+                        vx: (Math.random() - 0.5) * 0.12,
+                        vy: (Math.random() - 0.5) * 0.12 - 0.08,
+                        baseAlpha: Math.random() * 0.18 + 0.08,
+                        twinkleSpeed: Math.random() * 0.015 + 0.004,
+                        twinkleOffset: Math.random() * Math.PI * 2,
+                        hue: Math.random() > 0.45 ? 120 : 180,
+                    });
+                }
+            }
+
+            start() {
+                this.running = true;
+                // 渐变浮现，避免突兀
+                this._fadeIn = 0;
+                this._tick();
+            }
+
+            stop() {
+                this.running = false;
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+            }
+
+            _tick() {
+                if (!this.running) return;
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+
+                // 极缓慢拖尾，星点残影更持久
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+                ctx.fillRect(0, 0, w, h);
+
+                // 淡入系数
+                if (this._fadeIn < 1) this._fadeIn = Math.min(1, this._fadeIn + 0.06);
+
+                const now = performance.now() * 0.001;
+
+                for (const s of this.stars) {
+                    // 漂移
+                    s.x += s.vx;
+                    s.y += s.vy;
+                    // 边界环绕
+                    if (s.x < -10) s.x = w + 10;
+                    if (s.x > w + 10) s.x = -10;
+                    if (s.y < -10) s.y = h + 10;
+                    if (s.y > h + 10) s.y = -10;
+
+                    // 闪烁
+                    const twinkle = 0.5 + 0.5 * Math.sin(now * s.twinkleSpeed + s.twinkleOffset);
+                    const alpha = s.baseAlpha * (0.6 + 0.4 * twinkle) * this._fadeIn;
+                    if (alpha < 0.005) continue;
+
+                    const rgb = s.hue === 120 ? '0, 230, 0' : '0, 200, 200';
+
+                    // 柔和光点（单层即可，暗光不需要多层光晕）
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.size * 2, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${rgb}, ${alpha * 0.55})`;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${rgb}, ${alpha})`;
+                    ctx.fill();
+                }
+
+                this.animationId = requestAnimationFrame(() => this._tick());
+            }
+
+            destroy() {
+                this.stop();
+                window.removeEventListener('resize', this._boundResize);
+                this.stars = [];
+            }
+        }
+
+        // ==================== 主动画序列控制器 ====================
+
+        async function runAnimationSequence() {
+            // 清空初始 ">" 提示符
+            terminal.innerHTML = '';
+
+            // 音频初始化（fire-and-forget，不阻塞动画）
+            audio.init().catch(() => {});
+
+            try {
+                // ---- 阶段一：系统伪装启动 ----
+                await phaseOne();
+
+                // ---- 阶段二：加载进度条 → 屏幕故障 → 清屏 ----
+                await phaseTwo();
+
+                // ---- 阶段三：代码雨浮现 + 温暖 Pad + 核心祝福输出 ----
+                await phaseThree();
+
+                // 祝福文字完成后稍作停顿
+                await sleep(1500);
+
+                // ---- 阶段四：Canvas 粒子视觉彩蛋 ----
+                const effect = new ParticleEffect(particleCanvas, particleCtx);
+                await effect.run();
+                effect.destroy();
+
+                // ---- 暗光星场：替代纯黑背景，持续漂移闪烁 ----
+                const starfield = new AmbientStarfield(particleCanvas, particleCtx);
+                starfield.start();
+
+                // ---- CSS 背景光晕：终端背后暗绿色柔光 ----
+                document.body.classList.add('ambient-glow');
+
+                // ---- 动画结束：启用点击迸发彩蛋 ----
+                const clickBurst = new ClickBurst(particleCanvas, particleCtx);
+                clickBurst.enable();
+
+                // 如果 AudioContext 因自动播放策略被挂起，首次点击时恢复
+                if (audio.ctx && audio.ctx.state === 'suspended') {
+                    const resumeAudio = () => {
+                        audio.ctx.resume();
+                        window.removeEventListener('click', resumeAudio);
+                        window.removeEventListener('touchstart', resumeAudio);
+                    };
+                    window.addEventListener('click', resumeAudio);
+                    window.addEventListener('touchstart', resumeAudio);
+                }
+            } catch (err) {
+                // 极端兜底：即使出错也显示核心祝福
+                terminal.innerHTML = '';
+                const fallback = document.createElement('div');
+                fallback.className = 'terminal-line warm';
+                fallback.innerHTML = 'Happy 20th Birthday, ' + recipientName + '.<span class="cursor cyan">_</span>';
+                terminal.appendChild(fallback);
+                console.warn('Animation fallback:', err.message);
+            }
+        }
+
+        // ==================== 启动入口 ====================
+
+        // 页面加载后立即启动，微延迟确保 CSS 就绪
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', () => {
+                setTimeout(runAnimationSequence, 200);
+            });
+        } else {
+            // DOM 已就绪（某些浏览器可能先执行脚本再渲染）
+            setTimeout(runAnimationSequence, 200);
+        }
+
+    })();
+    </script>
+</body>
+</html>
