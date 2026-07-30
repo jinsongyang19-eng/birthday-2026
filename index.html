@@ -34,7 +34,7 @@
             pointer-events: none;
             background-color: transparent;
             background-image:
-                radial-gradient(1px 1px at 8% 12%, rgba(180,190,220,0.5), transparent),
+                radial-gradient(3px 3px at 8% 12%, rgba(200,210,240,0.65), transparent),
                 radial-gradient(1px 1px at 15% 28%, rgba(200,210,240,0.4), transparent),
                 radial-gradient(1.5px 1.5px at 22% 8%, rgba(180,200,230,0.55), transparent),
                 radial-gradient(1px 1px at 31% 42%, rgba(190,200,220,0.35), transparent),
@@ -137,7 +137,7 @@
             word-break: break-all;
             /* 文字发光辉光效果 */
             text-shadow: 0 0 4px rgba(0, 255, 0, 0.6),
-                         0 0 12px rgba(0, 255, 0, 0.3),
+                         0 0 13px rgba(0, 255, 0, 0.3),
                          0 0 30px rgba(0, 255, 0, 0.15);
             /* 终端边框微光 */
             border: 1px solid rgba(0, 255, 0, 0.15);
@@ -160,7 +160,7 @@
         .terminal-line.sys {
             color: #ff9900;
             text-shadow: 0 0 4px rgba(255, 153, 0, 0.6),
-                         0 0 12px rgba(255, 153, 0, 0.3);
+                         0 0 13px rgba(255, 153, 0, 0.3);
         }
         .cursor:not(.cyan) {
             color: #ff9900;
@@ -297,7 +297,7 @@
             0%   { transform: translateX(0); }
             10%  { transform: translateX(-4px) skewY(0.3deg); }
             20%  { transform: translateX(6px) skewY(-0.2deg); }
-            30%  { transform: translateX(-2px); }
+            30%  { transform: translateX(-3px); }
             40%  { transform: translateX(8px); }
             50%  { transform: translateX(-6px) skewY(0.1deg); }
             60%  { transform: translateX(3px); }
@@ -309,19 +309,19 @@
 
         @keyframes glitchRGB {
             0%   { text-shadow:
-                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
-                2px 0 rgba(255,0,0,0.4), -2px 0 rgba(0,255,255,0.4); }
+                0 0 4px rgba(0,255,0,0.6), 0 0 13px rgba(0,255,0,0.3),
+                3px 0 rgba(255,0,0,0.4), -3px 0 rgba(0,255,255,0.4); }
             25%  { text-shadow:
-                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                0 0 4px rgba(0,255,0,0.6), 0 0 13px rgba(0,255,0,0.3),
                 -3px 0 rgba(255,0,0,0.5), 3px 0 rgba(0,255,255,0.5); }
             50%  { text-shadow:
-                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                0 0 4px rgba(0,255,0,0.6), 0 0 13px rgba(0,255,0,0.3),
                 4px 0 rgba(255,0,0,0.3), -4px 0 rgba(0,255,255,0.3); }
             75%  { text-shadow:
-                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
-                -2px 0 rgba(255,0,0,0.5), 2px 0 rgba(0,255,255,0.5); }
+                0 0 4px rgba(0,255,0,0.6), 0 0 13px rgba(0,255,0,0.3),
+                -3px 0 rgba(255,0,0,0.5), 3px 0 rgba(0,255,255,0.5); }
             100% { text-shadow:
-                0 0 4px rgba(0,255,0,0.6), 0 0 12px rgba(0,255,0,0.3),
+                0 0 4px rgba(0,255,0,0.6), 0 0 13px rgba(0,255,0,0.3),
                 0px 0 rgba(255,0,0,0), 0px 0 rgba(0,255,255,0); }
         }
 
@@ -342,7 +342,7 @@
         @media (min-width: 1200px) {
             #terminal {
                 max-width: 800px;
-                padding: 36px 32px;
+                padding: 36px 33px;
                 font-size: 19px;
                 line-height: 1.9;
             }
