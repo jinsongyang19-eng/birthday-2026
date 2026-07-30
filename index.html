@@ -338,40 +338,32 @@
             display: flex; align-items: center; justify-content: center;
             pointer-events: none;
         }
-        #book-stage {
+        #book-curtain {
             position: fixed; top:0; left:0;
             width:100%; height:100%;
             z-index: 300;
-            pointer-events: none;
-            overflow: hidden;
-        }
-        #curtain-left, #curtain-right {
-            position: absolute; top:0; width:50%; height:100%;
             background: #020208;
-            box-shadow: 0 0 80px rgba(0,0,0,0.8);
-            transition: transform 1.3s cubic-bezier(0.55, 0, 0.1, 1);
         }
-        #curtain-left  { left:0; }
-        #curtain-right { right:0; }
-        /* 书脊微光 */
-        #book-stage::before {
-            content: '';
+        #book-spine {
             position: absolute; left:50%; top:0;
             width:2px; height:100%;
             background: linear-gradient(180deg,
                 transparent 20%,
-                rgba(255,220,120,0.2) 45%,
-                rgba(255,220,120,0.4) 50%,
-                rgba(255,220,120,0.2) 55%,
+                rgba(255,220,120,0.3) 48%,
+                rgba(255,220,120,0.5) 50%,
+                rgba(255,220,120,0.3) 52%,
                 transparent 80%
             );
             transform: translateX(-1px);
-            z-index: 1;
         }
-        /* 翻开 */
-        #book-stage.open #curtain-left  { transform: translateX(-100%); }
-        #book-stage.open #curtain-right { transform: translateX(100%); }
-        #book-stage.done { display: none; }
+        #book-curtain.open {
+            animation: curtainOpen 1.3s cubic-bezier(0.55, 0, 0.1, 1) forwards;
+        }
+        @keyframes curtainOpen {
+            0%   { transform: scaleX(1); }
+            100% { transform: scaleX(0); }
+        }
+        #book-curtain.done { display: none; }
 
         /* ========== 响应式适配 ========== */
         @media (max-width: 480px) {
@@ -396,9 +388,8 @@
 <body>
 
     <!-- 书页开合过渡 -->
-    <div id="book-stage">
-        <div id="curtain-left"></div>
-        <div id="curtain-right"></div>
+    <div id="book-curtain">
+        <div id="book-spine"></div>
     </div>
 
     <!-- 欢迎文字（在书页上方） -->
@@ -1735,13 +1726,13 @@
 
         // 书页翻开过渡（1.2s 动画 + 0.4s 停顿）
         async function bookOpenTransition() {
-            const stage = document.getElementById('book-stage');
+            const curtain = document.getElementById('book-curtain');
             const welcome = document.getElementById('welcome-overlay');
-            stage.classList.add('open');
+            curtain.classList.add('open');
             welcome.style.opacity = '0';
             welcome.style.transition = 'opacity 0.6s ease';
-            await sleep(1400);
-            stage.classList.add('done');
+            await sleep(1500);
+            curtain.classList.add('done');
             welcome.style.display = 'none';
             await sleep(400);
         }
