@@ -80,13 +80,13 @@
             );
         }
         body.golden-mood .terminal-line.warm {
-            color: #8b4513;
+            color: #7a5030;
             text-shadow: 0 0 6px rgba(120, 60, 20, 0.6),
                          0 0 16px rgba(100, 50, 15, 0.3),
                          0 0 35px rgba(80, 40, 10, 0.12);
         }
         body.golden-mood .cursor.cyan {
-            color: #8b4513;
+            color: #7a5030;
             text-shadow: 0 0 8px rgba(120, 60, 20, 0.9),
                          0 0 20px rgba(100, 50, 15, 0.5),
                          0 0 40px rgba(80, 40, 10, 0.25);
@@ -130,7 +130,7 @@
             width: 92%;
             max-width: 720px;
             padding: 28px 24px;
-            color: #4a3020;
+            color: #6b4b30;
             font-size: clamp(13px, 2.8vw, 17px);
             line-height: 1.8;
             letter-spacing: 0.02em;
@@ -153,12 +153,12 @@
 
         /* 系统阶段：复古琥珀色 */
         .terminal-line.sys {
-            color: #6b4c3b;
+            color: #8b6b4a;
             text-shadow: 0 0 4px rgba(80, 50, 30, 0.6),
                          0 0 13px rgba(80, 50, 30, 0.3);
         }
         .cursor:not(.cyan) {
-            color: #6b4c3b;
+            color: #8b6b4a;
             text-shadow: 0 0 8px rgba(80, 50, 30, 0.9),
                          0 0 20px rgba(80, 50, 30, 0.5),
                          0 0 40px rgba(80, 50, 30, 0.25);
@@ -166,7 +166,7 @@
 
         /* 温情阶段：极客青色 */
         .terminal-line.warm {
-            color: #3a1f0d;
+            color: #5a3820;
             text-shadow: 0 0 5px rgba(60, 30, 10, 0.6),
                          0 0 14px rgba(60, 30, 10, 0.3),
                          0 0 30px rgba(60, 30, 10, 0.12);
@@ -191,7 +191,7 @@
         /* ========== 闪烁光标（增强辉光） ========== */
         .cursor {
             display: inline;
-            color: #6b4c3b;
+            color: #8b6b4a;
             font-weight: bold;
             animation: cursorBlink 1s step-end infinite;
             /* 光标后方光斑 */
@@ -200,7 +200,7 @@
                          0 0 40px rgba(60, 30, 10, 0.25);
         }
         .cursor.cyan {
-            color: #3a1f0d;
+            color: #5a3820;
             text-shadow: 0 0 8px rgba(60, 30, 10, 0.9),
                          0 0 20px rgba(60, 30, 10, 0.5),
                          0 0 40px rgba(60, 30, 10, 0.25);
@@ -1007,9 +1007,29 @@
             draftCursor.remove();
             draftLine.remove();
 
-            // ---- 子阶段 3c：真正的名字揭晓 + 后续祝福 ----
+            // ---- 子阶段 3c：方琪姐 → 删除 → 烂番茄 ----
+            await typeLine(recipientName + '。', 140, 'warm', true);
+            await sleep(1200);
+            // 删掉方琪姐
+            const nameLine = terminal.lastElementChild;
+            if (nameLine) {
+                const txt = recipientName + '。';
+                for (let i = txt.length - 1; i >= 0; i--) {
+                    const last = nameLine.lastChild;
+                    if (last && last.nodeType === 3) {
+                        last.textContent.length > 1 ? last.textContent = last.textContent.slice(0, -1) : last.remove();
+                    }
+                    await sleep(150);
+                }
+                await sleep(400);
+                nameLine.remove();
+            }
+            // 换成烂番茄
+            await typeLine('烂番茄', 160, 'warm', true);
+            await sleep(600);
+
+            // ---- 子阶段 3d：后续祝福 ----
             const warmLines = [
-                [recipientName + '。', 140],
                 ['', 0],
                 ['20岁不是一个数字，而是一个全新的坐标。', 100],
                 ['在这个无边际的系统里，愿你始终拥有覆盖全局的权限，', 100],
@@ -1031,7 +1051,7 @@
                 }
             }
 
-            // ---- 子阶段 3d：最后一句话之前，长犹豫 ----
+            // ---- 子阶段 3e：最后一句话之前，长犹豫 ----
             await sleep(1800);
 
             // 极慢速打出最后一句
