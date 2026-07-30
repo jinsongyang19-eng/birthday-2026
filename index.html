@@ -359,7 +359,7 @@
 
     <!-- 终端文本输出区 -->
     <div id="terminal-wrapper">
-        <div id="terminal"><div class="terminal-line sys">>_</div></div>
+        <div id="terminal"><div class="terminal-line sys" id="welcome-line">PRESS ENTER TO INITIALIZE<span class="cursor">_</span></div></div>
     </div>
 
     <!-- 粒子动画画布 -->
@@ -1658,14 +1658,40 @@
 
         // ==================== 启动入口 ====================
 
-        // 页面加载后立即启动，微延迟确保 CSS 就绪
+        // 按回车启动动画（页面加载后等待用户交互）
+        function waitForEnter() {
+            return new Promise(resolve => {
+                const handler = (e) => {
+                    if (e.key === 'Enter') {
+                        window.removeEventListener('keydown', handler);
+                        window.removeEventListener('touchstart', touchHandler);
+                        resolve();
+                    }
+                };
+                const touchHandler = () => {
+                    // 移动端：点击屏幕任意位置即启动
+                    window.removeEventListener('keydown', handler);
+                    window.removeEventListener('touchstart', touchHandler);
+                    resolve();
+                };
+                window.addEventListener('keydown', handler);
+                // 移动端兼容：点击也能启动
+                window.addEventListener('touchstart', touchHandler, { once: false });
+            });
+        }
+
         if (document.readyState === 'loading') {
-            window.addEventListener('DOMContentLoaded', () => {
+            window.addEventListener('DOMContentLoaded', async () => {
+                await waitForEnter();
+                terminal.innerHTML = '';
                 setTimeout(runAnimationSequence, 200);
             });
         } else {
-            // DOM 已就绪（某些浏览器可能先执行脚本再渲染）
-            setTimeout(runAnimationSequence, 200);
+            (async () => {
+                await waitForEnter();
+                terminal.innerHTML = '';
+                setTimeout(runAnimationSequence, 200);
+            })();
         }
 
     })();
